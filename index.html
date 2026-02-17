@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fishifox CRM | V2</title>
+
+    <!-- Tailwind CDN (OK for quick testing; for production use Tailwind via npm) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@700;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#4B49AC",
+              secondary: "#FF8E3C",
+              brand: "#7978E9",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f8fafc;
+        color: #2f2f2f;
+        margin: 0;
+        padding: 0;
+      }
+      .font-logo {
+        font-family: "Playfair Display", serif;
+      }
+      .mindskills-shadow {
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.04);
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+      }
+      .sidebar-link-active {
+        background-color: #f5f7ff;
+        color: #4b49ac !important;
+        border-top-left-radius: 2rem;
+        border-bottom-left-radius: 2rem;
+        position: relative;
+        margin-left: 1rem;
+      }
+      .sidebar-link-active::before {
+        content: "";
+        position: absolute;
+        right: 0;
+        top: -2rem;
+        width: 2rem;
+        height: 2rem;
+        background: transparent;
+        border-bottom-right-radius: 1.5rem;
+        box-shadow: 1rem 1rem 0 0 #f5f7ff;
+      }
+      .sidebar-link-active::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: -2rem;
+        width: 2rem;
+        height: 2rem;
+        background: transparent;
+        border-top-right-radius: 1.5rem;
+        box-shadow: 1rem -1rem 0 0 #f5f7ff;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-in {
+        animation: fadeIn 0.5s ease-out forwards;
+      }
+    </style>
+  </head>
+
+  <body class="overflow-hidden">
+    <div id="root"></div>
+
+    <!-- Vite entry (MOST IMPORTANT) -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
