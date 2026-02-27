@@ -1,12 +1,11 @@
-
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Users, 
-  Layers, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Briefcase,
+  Users,
+  Layers,
+  FileText,
   BellRing,
   FileBadge,
   CalendarClock,
@@ -27,14 +26,20 @@ const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="w-64 flex flex-col bg-primary text-white/70 py-10">
+    <aside
+      className="w-64 flex flex-col py-10"
+      style={{
+        backgroundColor: 'var(--sidebar-bg)',
+        color: 'var(--sidebar-text)',
+      }}
+    >
       <div className="px-8 mb-12">
         <div className="space-y-1">
           <h1 className="text-4xl font-logo font-black tracking-tight leading-none">
             <span className="text-white">Fishi</span>
-            <span className="text-secondary">Fox</span>
+            <span style={{ color: 'rgb(var(--secondary))' }}>Fox</span>
           </h1>
-          <p className="text-[7px] font-black text-white/50 uppercase tracking-[0.25em] leading-tight whitespace-nowrap">
+          <p className="text-[7px] font-black uppercase tracking-[0.25em] leading-tight whitespace-nowrap opacity-60">
             DIVING TO AN UNEXPECTED DEPTH
           </p>
         </div>
@@ -47,9 +52,7 @@ const Sidebar: React.FC = () => {
             to={item.path}
             className={({ isActive }) => `
               flex items-center gap-4 px-8 py-4 transition-all duration-300 group
-              ${isActive 
-                ? 'sidebar-link-active' 
-                : 'hover:text-white hover:bg-white/5'}
+              ${isActive ? 'sidebar-link-active' : 'hover:text-white hover:bg-white/5'}
             `}
           >
             <span className="shrink-0 group-hover:scale-110 transition-transform">{item.icon}</span>
@@ -58,7 +61,7 @@ const Sidebar: React.FC = () => {
         ))}
       </nav>
 
-      <div className="mt-auto px-8 pb-4 opacity-30 text-[9px] font-black uppercase tracking-widest text-white/50">
+      <div className="mt-auto px-8 pb-4 opacity-30 text-[9px] font-black uppercase tracking-widest">
         Fishifox Systems v2.0
       </div>
     </aside>
