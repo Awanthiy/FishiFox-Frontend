@@ -14,7 +14,7 @@ type Quote = {
   converted?: boolean;
 };
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = import.meta.env.VITE_API_URL;
 
 type FormState = {
   quote_number: string; // optional for create (auto-generate)

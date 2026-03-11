@@ -16,7 +16,7 @@ type RecurringTemplate = {
   next_run_date: string | null; // YYYY-MM-DD
 };
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = import.meta.env.VITE_API_URL;
 const EXECUTED_KEY = 'ff_executed_automations';
 
 type AutomationForm = {
