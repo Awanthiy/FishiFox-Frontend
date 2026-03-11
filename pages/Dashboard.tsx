@@ -17,7 +17,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = import.meta.env.VITE_API_URL;
 
 type GrowthPoint = { name: string; value: number };
 

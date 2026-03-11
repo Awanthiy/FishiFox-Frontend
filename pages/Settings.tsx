@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { User, Camera, CheckCircle2, Mail, RefreshCw } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE;
+const API_BASE = import.meta.env.VITE_API_URL;
 
 type ProfileDTO = {
   name: string;
