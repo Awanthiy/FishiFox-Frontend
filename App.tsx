@@ -19,7 +19,7 @@ import SignIn from "./pages/SignIn";
 
 import { db } from "./db";
 
-const API_BASE = "http://127.0.0.1:8000/api";
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 /** Only two modes + two accents */
 type ThemeMode = "light" | "dark";
