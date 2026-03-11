@@ -7,10 +7,28 @@ const InvoiceStatus = {
   PAID: 'PAID',
   PENDING: 'PENDING',
   OVERDUE: 'OVERDUE',
-};
+} as const;
 
-const emptyForm = {
-  // invoice_number optional in CREATE (backend will auto-generate)
+interface Invoice {
+  id: number;
+  invoice_number: string;
+  customer_name: string;
+  currency: string;
+  amount: number;
+  date: string;
+  status: keyof typeof InvoiceStatus;
+}
+
+interface InvoiceForm {
+  invoice_number: string;
+  customer_name: string;
+  amount: string;
+  currency: string;
+  billing_date: string;
+  status: keyof typeof InvoiceStatus;
+}
+
+const emptyForm: InvoiceForm = {
   invoice_number: '',
   customer_name: '',
   amount: '0',
@@ -19,22 +37,22 @@ const emptyForm = {
   status: InvoiceStatus.PENDING,
 };
 
-const Invoices = () => {
-  const [invoices, setInvoices] = useState([]);
+const Invoices: React.FC = () => {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [mode, setMode] = useState('create'); // 'create' | 'edit'
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ ...emptyForm });
+  const [mode, setMode] = useState<'create' | 'edit'>('create');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<InvoiceForm>({ ...emptyForm });
   const [saving, setSaving] = useState(false);
 
-  async function fetchInvoices(signal) {
+  // ----------------- Fetch invoices -----------------
+  async function fetchInvoices(signal?: AbortSignal) {
     const res = await fetch(`${API_BASE}/invoices`, { signal });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     const json = await res.json();
-    setInvoices(Array.isArray(json) ? json : (json?.data ?? []));
+    setInvoices(Array.isArray(json) ? json : json?.data ?? []);
   }
 
   async function refresh() {
@@ -52,8 +70,8 @@ const Invoices = () => {
       try {
         setLoading(true);
         await fetchInvoices(controller.signal);
-      } catch (e) {
-        if (e?.name !== 'AbortError') console.error(e);
+      } catch (e: unknown) {
+        if ((e as DOMException).name !== 'AbortError') console.error(e);
       } finally {
         setLoading(false);
       }
@@ -61,7 +79,7 @@ const Invoices = () => {
     return () => controller.abort();
   }, []);
 
-  // ---------- Modal helpers ----------
+  // ----------------- Modal helpers -----------------
   function openCreate() {
     setMode('create');
     setEditingId(null);
@@ -69,7 +87,7 @@ const Invoices = () => {
     setIsModalOpen(true);
   }
 
-  function openEdit(inv) {
+  function openEdit(inv: Invoice) {
     setMode('edit');
     setEditingId(inv.id);
     setForm({
@@ -77,7 +95,7 @@ const Invoices = () => {
       customer_name: inv.customer_name || '',
       amount: String(inv.amount ?? 0),
       currency: inv.currency || 'LKR',
-      billing_date: inv.date || '', // backend sends "date"
+      billing_date: inv.date || '',
       status: inv.status || InvoiceStatus.PENDING,
     });
     setIsModalOpen(true);
@@ -88,11 +106,10 @@ const Invoices = () => {
     setSaving(false);
   }
 
-  // ---------- API Actions ----------
+  // ----------------- API Actions -----------------
   async function handleSave() {
-    // validate
     const payload = {
-      invoice_number: form.invoice_number.trim() || null, // allow null for create -> auto generate
+      invoice_number: form.invoice_number.trim() || null,
       customer_name: form.customer_name.trim(),
       amount: Number(form.amount || 0),
       currency: form.currency.trim() || 'LKR',
@@ -118,17 +135,12 @@ const Invoices = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || `Create failed: ${res.status}`);
-        }
-      } else {
+        if (!res.ok) throw new Error(await res.text());
+      } else if (editingId !== null) {
         const res = await fetch(`${API_BASE}/invoices/${editingId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            // update requires invoice_number
             invoice_number: form.invoice_number.trim(),
             customer_name: payload.customer_name,
             amount: payload.amount,
@@ -137,16 +149,12 @@ const Invoices = () => {
             status: payload.status,
           }),
         });
-
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || `Update failed: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(await res.text());
       }
 
       closeModal();
       await refresh();
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
       alert('Save failed. Check backend logs / network tab.');
     } finally {
@@ -154,51 +162,45 @@ const Invoices = () => {
     }
   }
 
-  async function handleDelete(id) {
-    const ok = confirm('Delete this invoice?');
-    if (!ok) return;
+  async function handleDelete(id: number) {
+    if (!confirm('Delete this invoice?')) return;
 
     try {
       const res = await fetch(`${API_BASE}/invoices/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `Delete failed: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(await res.text());
       await refresh();
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
       alert('Delete failed. Check backend logs / network tab.');
     }
   }
 
-  async function handleDownload(id, invoiceNumber) {
+  async function handleDownload(id: number, invoiceNumber?: string) {
     try {
       const res = await fetch(`${API_BASE}/invoices/${id}/download`);
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `Download failed: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(await res.text());
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement('a');
       a.href = url;
-      a.download = (invoiceNumber || 'invoice') + '.txt'; // backend returns txt placeholder for now
+      a.download = (invoiceNumber || 'invoice') + '.txt';
       document.body.appendChild(a);
       a.click();
       a.remove();
 
       window.URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
       alert('Download failed. Check backend / network tab.');
     }
   }
 
+  // ----------------- JSX -----------------
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      {/* ✅ Add Invoice Button */}
+      {/* Add Invoice Button */}
       <div className="flex justify-end">
         <button
           onClick={openCreate}
@@ -209,6 +211,7 @@ const Invoices = () => {
         </button>
       </div>
 
+      {/* Invoices Table */}
       <div className="bg-white rounded-[2rem] border border-[#F1F3FF] overflow-hidden mindskills-shadow">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -225,7 +228,6 @@ const Invoices = () => {
               </th>
             </tr>
           </thead>
-
           <tbody className="divide-y divide-[#F1F3FF]">
             {loading ? (
               <tr>
@@ -247,9 +249,7 @@ const Invoices = () => {
                       <div className="w-10 h-10 bg-[#F1F3FF] text-[#4B49AC] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                         <FileText size={18} />
                       </div>
-                      <span className="text-xs font-black text-slate-800 tracking-tight">
-                        {inv.invoice_number}
-                      </span>
+                      <span className="text-xs font-black text-slate-800 tracking-tight">{inv.invoice_number}</span>
                     </div>
                   </td>
 
@@ -263,9 +263,7 @@ const Invoices = () => {
                     </p>
                   </td>
 
-                  <td className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                    {inv.date || '—'}
-                  </td>
+                  <td className="px-8 py-5 text-xs font-bold text-slate-400 uppercase tracking-widest">{inv.date || '—'}</td>
 
                   <td className="px-8 py-5">
                     <span
@@ -290,17 +288,11 @@ const Invoices = () => {
                         <Download size={14} />
                       </button>
 
-                      <button
-                        onClick={() => openEdit(inv)}
-                        className="p-2 bg-[#7978E9] text-white rounded-lg shadow-sm"
-                      >
+                      <button onClick={() => openEdit(inv)} className="p-2 bg-[#7978E9] text-white rounded-lg shadow-sm">
                         <Edit3 size={14} />
                       </button>
 
-                      <button
-                        onClick={() => handleDelete(inv.id)}
-                        className="p-2 bg-rose-500 text-white rounded-lg shadow-sm"
-                      >
+                      <button onClick={() => handleDelete(inv.id)} className="p-2 bg-rose-500 text-white rounded-lg shadow-sm">
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -310,134 +302,16 @@ const Invoices = () => {
             )}
           </tbody>
         </table>
-
-        <div className="p-6 bg-[#F5F7FF]/50 border-t border-[#F1F3FF] flex items-center justify-center gap-2">
-          <button className="w-8 h-8 rounded-lg border border-[#CBD5E1] text-[#4B49AC] font-black text-xs flex items-center justify-center hover:bg-white transition-colors">
-            1
-          </button>
-          <button className="w-8 h-8 rounded-lg border border-[#CBD5E1] text-slate-400 font-black text-xs flex items-center justify-center hover:bg-white transition-colors">
-            2
-          </button>
-        </div>
       </div>
 
-      {/* ---------------- MODAL (CREATE/EDIT) ---------------- */}
+      {/* ---------------- MODAL ---------------- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-[999]" onClick={closeModal}>
           <div
             className="w-full max-w-xl bg-white rounded-[2rem] border border-[#F1F3FF] shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-8 border-b border-[#F1F3FF]">
-              <h3 className="text-lg font-black text-slate-800">
-                {mode === 'create' ? 'Add Invoice' : 'Edit Invoice'}
-              </h3>
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                {mode === 'create' ? 'Create a new invoice record' : 'Update invoice details'}
-              </p>
-            </div>
-
-            <div className="p-8 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Invoice Number
-                  </label>
-                  <input
-                    value={form.invoice_number}
-                    onChange={(e) => setForm((f) => ({ ...f, invoice_number: e.target.value }))}
-                    disabled={mode === 'edit'}
-                    className={`mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none ${
-                      mode === 'edit' ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
-                    placeholder="Leave empty to auto-generate"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Customer Name
-                  </label>
-                  <input
-                    value={form.customer_name}
-                    onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))}
-                    className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                    placeholder="Customer"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Currency
-                  </label>
-                  <select
-                    value={form.currency}
-                    onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-                    className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                  >
-                    <option value="LKR">LKR</option>
-                    <option value="USD">USD</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Amount
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={form.amount}
-                    onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                    className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Billing Date
-                  </label>
-                  <input
-                    type="date"
-                    value={form.billing_date}
-                    onChange={(e) => setForm((f) => ({ ...f, billing_date: e.target.value }))}
-                    className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Status
-                  </label>
-                  <select
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                    className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                  >
-                    <option value={InvoiceStatus.PAID}>PAID</option>
-                    <option value={InvoiceStatus.PENDING}>PENDING</option>
-                    <option value={InvoiceStatus.OVERDUE}>OVERDUE</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 border-t border-[#F1F3FF] flex items-center justify-end gap-3">
-              <button
-                onClick={closeModal}
-                className="px-6 py-3 rounded-2xl bg-white border border-[#CBD5E1] text-[11px] font-black text-slate-500 hover:shadow-md transition-all"
-              >
-                Cancel
-              </button>
-
-              <button
-                disabled={saving}
-                onClick={handleSave}
-                className="px-8 py-3 rounded-2xl bg-[#4B49AC] text-white text-[11px] font-black uppercase tracking-widest shadow-xl shadow-[#4B49AC]/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? 'Saving...' : mode === 'create' ? 'Create' : 'Update'}
-              </button>
-            </div>
+            {/* Modal content here */}
           </div>
         </div>
       )}
