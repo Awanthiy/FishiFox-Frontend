@@ -50,7 +50,8 @@ const Header: React.FC = () => {
     loadSettings();
     const onChanged = () => loadSettings();
     window.addEventListener("fishifox-settings-changed", onChanged);
-    return () => window.removeEventListener("fishifox-settings-changed", onChanged);
+    return () =>
+      window.removeEventListener("fishifox-settings-changed", onChanged);
   }, []);
 
   const avatarSrc = useMemo(() => {
@@ -63,20 +64,21 @@ const Header: React.FC = () => {
   }, [profile.avatar_url, profile.avatar_seed, profile.name]);
 
   return (
-    <header className="h-24 flex items-center justify-between px-10 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-white/80 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-50">
-      <div className="flex items-center gap-6 flex-1">
-        <div className="flex items-center gap-3 flex-1 max-xl">{/* left area */}</div>
-      </div>
+    <header className="h-24 flex items-center justify-end px-10 border-b border-transparent shrink-0 bg-transparent sticky top-0 z-50 pointer-events-none">
+      
+      <div className="flex items-center gap-6 pointer-events-auto">
 
-      <div className="flex items-center gap-6">
-        <button className="p-3 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all relative group">
+        {/* Notification */}
+        <button className="p-3 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-xl transition-all relative">
           <Bell size={22} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-slate-900"></span>
+          <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white"></span>
         </button>
 
-        <div className="flex items-center gap-4 pl-2 group relative">
+        {/* Profile */}
+        <div className="flex items-center gap-4 group relative">
+
           <div className="text-right hidden md:block">
-            <p className="text-[11px] font-black text-slate-900 dark:text-slate-100 uppercase tracking-tight leading-none">
+            <p className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-none">
               {profile.name}
             </p>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
@@ -89,7 +91,7 @@ const Header: React.FC = () => {
               <img
                 src={avatarSrc}
                 alt="user"
-                className="w-full h-full rounded-[0.9rem] object-cover bg-white dark:bg-slate-900"
+                className="w-full h-full rounded-[0.9rem] object-cover bg-white"
               />
             </div>
 
@@ -101,7 +103,9 @@ const Header: React.FC = () => {
               <LogOut size={12} />
             </button>
           </div>
+
         </div>
+
       </div>
     </header>
   );
