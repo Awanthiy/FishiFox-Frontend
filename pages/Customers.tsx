@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, Mail, Phone, MoreVertical } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MoreVertical, MapPin, User } from 'lucide-react';
 
-type CustomerStatus = 'Enterprise' | 'Premium' | 'Regular' | 'New';
+type CustomerStatus = 'Active' | 'Inactive' | 'Lead';
+type CustomerType = 'Individual' | 'Company';
 
 type Customer = {
   id: string;
   name: string;
   email: string | null;
   phone: string | null;
-  activeProjects: number;
-  totalBilled: string;
+  customerType: CustomerType;
+  contactPerson: string | null;
+  address: string | null;
+  activeProjects?: number;
+  totalBilled?: number;
   status: CustomerStatus;
 };
 
@@ -29,8 +33,9 @@ type FormState = {
   name: string;
   email: string;
   phone: string;
-  activeProjects: string; // keep as string for input
-  totalBilled: string;
+  customerType: CustomerType;
+  contactPerson: string;
+  address: string;
   status: CustomerStatus;
 };
 
@@ -38,9 +43,15 @@ const emptyForm: FormState = {
   name: '',
   email: '',
   phone: '',
-  activeProjects: '0',
-  totalBilled: 'LKR 0',
-  status: 'New',
+  customerType: 'Individual',
+  contactPerson: '',
+  address: '',
+  status: 'Active',
+};
+
+const formatCurrency = (value?: number) => {
+  const amount = Number(value ?? 0);
+  return `LKR ${amount.toLocaleString()}`;
 };
 
 const Customers: React.FC = () => {
@@ -55,10 +66,8 @@ const Customers: React.FC = () => {
 
   const debouncedSearch = useMemo(() => search.trim(), [search]);
 
-  // 3-dots menu state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mode, setMode] = useState<'create' | 'edit'>('create');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,9 +89,10 @@ const Customers: React.FC = () => {
       name: c.name ?? '',
       email: c.email ?? '',
       phone: c.phone ?? '',
-      activeProjects: String(c.activeProjects ?? 0),
-      totalBilled: c.totalBilled ?? 'LKR 0',
-      status: c.status ?? 'New',
+      customerType: c.customerType ?? 'Individual',
+      contactPerson: c.contactPerson ?? '',
+      address: c.address ?? '',
+      status: c.status ?? 'Active',
     });
     setIsModalOpen(true);
     setOpenMenuId(null);
@@ -104,7 +114,6 @@ const Customers: React.FC = () => {
 
     const json = await res.json();
 
-    // supports both array OR paginated
     if (Array.isArray(json)) {
       setCustomers(json as Customer[]);
       setTotal((json as Customer[]).length);
@@ -129,6 +138,7 @@ const Customers: React.FC = () => {
         setLoading(false);
       }
     })();
+
     return () => controller.abort();
   }, [page, perPage, debouncedSearch]);
 
@@ -147,8 +157,9 @@ const Customers: React.FC = () => {
         name: form.name.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
-        activeProjects: Number(form.activeProjects || 0),
-        totalBilled: form.totalBilled.trim() || 'LKR 0',
+        customerType: form.customerType,
+        contactPerson: form.contactPerson.trim() || null,
+        address: form.address.trim() || null,
         status: form.status,
       };
 
@@ -174,7 +185,6 @@ const Customers: React.FC = () => {
       }
 
       closeModal();
-      // reload list from backend so UI is always correct
       setLoading(true);
       await loadCustomers();
     } catch (e) {
@@ -195,7 +205,6 @@ const Customers: React.FC = () => {
       const res = await fetch(`${API_BASE}/customers/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
 
-      // reload list
       setLoading(true);
       await loadCustomers();
     } catch (e) {
@@ -213,7 +222,7 @@ const Customers: React.FC = () => {
           <div>
             <h2 className="text-2xl font-black text-[#2F2F2F] tracking-tight">Customer Directory</h2>
             <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-1">
-              Manage client lifecycle and accounts
+              Manage customer records and communication details
             </p>
           </div>
 
@@ -239,113 +248,142 @@ const Customers: React.FC = () => {
           </div>
         </div>
 
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-[#7978E9] text-white">
-              <th className="px-10 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Customer Entity</th>
-              <th className="px-10 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Communication</th>
-              <th className="px-10 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Project Load</th>
-              <th className="px-10 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Tier</th>
-              <th className="px-10 py-6 text-right text-[11px] font-black uppercase tracking-[0.2em]">Actions</th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-[#F1F3FF]">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-10 py-10 text-sm font-black text-slate-400">
-                  Loading customers...
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[1100px]">
+            <thead>
+              <tr className="bg-[#7978E9] text-white">
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Customer</th>
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Type</th>
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Communication</th>
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Contact Person</th>
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Address</th>
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Status</th>
+                <th className="px-8 py-6 text-[11px] font-black uppercase tracking-[0.2em]">Summary</th>
+                <th className="px-8 py-6 text-right text-[11px] font-black uppercase tracking-[0.2em]">Actions</th>
               </tr>
-            ) : customers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-10 py-10 text-sm font-black text-slate-400">
-                  No customers found.
-                </td>
-              </tr>
-            ) : (
-              customers.map((customer) => (
-                <tr key={customer.id} className="hover:bg-[#F5F7FF] transition-colors group">
-                  <td className="px-10 py-7">
-                    <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-[#F1F3FF] text-[#4B49AC] rounded-2xl flex items-center justify-center font-black text-sm group-hover:scale-110 transition-transform shadow-inner">
-                        {(customer.name || '').substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-black text-slate-800 tracking-tight">{customer.name}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                          ID: #{customer.id}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
+            </thead>
 
-                  <td className="px-10 py-7">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-slate-600 text-[11px] font-bold">
-                        <Mail size={12} className="text-[#4B49AC]" />
-                        {customer.email ?? '—'}
-                      </div>
-                      <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold">
-                        <Phone size={12} />
-                        {customer.phone ?? '—'}
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="px-10 py-7">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-black text-slate-800">{customer.activeProjects ?? 0}</span>
-                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Active</span>
-                    </div>
-                  </td>
-
-                  <td className="px-10 py-7">
-                    <span
-                      className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
-                        customer.status === 'Enterprise'
-                          ? 'bg-[#4BDBE2] text-white'
-                          : customer.status === 'Premium'
-                          ? 'bg-[#7978E9] text-white'
-                          : 'bg-[#F1F3FF] text-[#4B49AC]'
-                      }`}
-                    >
-                      {customer.status}
-                    </span>
-                  </td>
-
-                  <td className="px-10 py-7 text-right">
-                    <div className="flex items-center justify-end gap-3 relative">
-                      <button
-                        onClick={() => setOpenMenuId((prev) => (prev === customer.id ? null : customer.id))}
-                        className="p-3 bg-white border border-[#F1F3FF] text-slate-400 rounded-xl hover:text-slate-600"
-                      >
-                        <MoreVertical size={16} />
-                      </button>
-
-                      {openMenuId === customer.id && (
-                        <div className="absolute right-0 top-14 w-44 bg-white border border-[#F1F3FF] rounded-2xl shadow-xl overflow-hidden z-50">
-                          <button
-                            onClick={() => openEdit(customer)}
-                            className="w-full text-left px-5 py-3 text-xs font-black text-slate-700 hover:bg-[#F5F7FF]"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(customer.id)}
-                            className="w-full text-left px-5 py-3 text-xs font-black text-red-600 hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+            <tbody className="divide-y divide-[#F1F3FF]">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-8 py-10 text-sm font-black text-slate-400">
+                    Loading customers...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : customers.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-8 py-10 text-sm font-black text-slate-400">
+                    No customers found.
+                  </td>
+                </tr>
+              ) : (
+                customers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-[#F5F7FF] transition-colors group">
+                    <td className="px-8 py-7">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-[#F1F3FF] text-[#4B49AC] rounded-2xl flex items-center justify-center font-black text-sm group-hover:scale-110 transition-transform shadow-inner">
+                          {(customer.name || '').substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-slate-800 tracking-tight">{customer.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                            ID: #{customer.id}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-8 py-7">
+                      <span className="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-[#F1F3FF] text-[#4B49AC]">
+                        {customer.customerType}
+                      </span>
+                    </td>
+
+                    <td className="px-8 py-7">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-slate-600 text-[11px] font-bold">
+                          <Mail size={12} className="text-[#4B49AC]" />
+                          {customer.email ?? '—'}
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold">
+                          <Phone size={12} />
+                          {customer.phone ?? '—'}
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-8 py-7">
+                      <div className="flex items-center gap-2 text-slate-600 text-[11px] font-bold">
+                        <User size={12} className="text-[#4B49AC]" />
+                        {customer.contactPerson ?? '—'}
+                      </div>
+                    </td>
+
+                    <td className="px-8 py-7">
+                      <div className="flex items-center gap-2 text-slate-600 text-[11px] font-bold max-w-[220px]">
+                        <MapPin size={12} className="text-[#4B49AC] shrink-0" />
+                        <span className="truncate">{customer.address ?? '—'}</span>
+                      </div>
+                    </td>
+
+                    <td className="px-8 py-7">
+                      <span
+                        className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                          customer.status === 'Active'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : customer.status === 'Inactive'
+                            ? 'bg-slate-200 text-slate-600'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {customer.status}
+                      </span>
+                    </td>
+
+                    <td className="px-8 py-7">
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-bold text-slate-600">
+                          Projects: <span className="text-slate-800 font-black">{customer.activeProjects ?? 0}</span>
+                        </p>
+                        <p className="text-[11px] font-bold text-slate-600">
+                          Billed: <span className="text-slate-800 font-black">{formatCurrency(customer.totalBilled)}</span>
+                        </p>
+                      </div>
+                    </td>
+
+                    <td className="px-8 py-7 text-right">
+                      <div className="flex items-center justify-end gap-3 relative">
+                        <button
+                          onClick={() => setOpenMenuId((prev) => (prev === customer.id ? null : customer.id))}
+                          className="p-3 bg-white border border-[#F1F3FF] text-slate-400 rounded-xl hover:text-slate-600"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+
+                        {openMenuId === customer.id && (
+                          <div className="absolute right-0 top-14 w-44 bg-white border border-[#F1F3FF] rounded-2xl shadow-xl overflow-hidden z-50">
+                            <button
+                              onClick={() => openEdit(customer)}
+                              className="w-full text-left px-5 py-3 text-xs font-black text-slate-700 hover:bg-[#F5F7FF]"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(customer.id)}
+                              className="w-full text-left px-5 py-3 text-xs font-black text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         <div className="p-10 bg-[#F5F7FF]/50 border-t border-[#F1F3FF] flex items-center justify-between">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -376,14 +414,13 @@ const Customers: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-[999]"
           onClick={closeModal}
         >
           <div
-            className="w-full max-w-xl bg-white rounded-[2rem] border border-[#F1F3FF] shadow-2xl overflow-hidden"
+            className="w-full max-w-2xl bg-white rounded-[2rem] border border-[#F1F3FF] shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-8 border-b border-[#F1F3FF]">
@@ -398,7 +435,7 @@ const Customers: React.FC = () => {
             <div className="p-8 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -408,16 +445,14 @@ const Customers: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Type</label>
                   <select
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as CustomerStatus }))}
+                    value={form.customerType}
+                    onChange={(e) => setForm((f) => ({ ...f, customerType: e.target.value as CustomerType }))}
                     className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
                   >
-                    <option>Enterprise</option>
-                    <option>Premium</option>
-                    <option>Regular</option>
-                    <option>New</option>
+                    <option>Individual</option>
+                    <option>Company</option>
                   </select>
                 </div>
 
@@ -442,23 +477,35 @@ const Customers: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Projects</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Person</label>
                   <input
-                    type="number"
-                    min={0}
-                    value={form.activeProjects}
-                    onChange={(e) => setForm((f) => ({ ...f, activeProjects: e.target.value }))}
+                    value={form.contactPerson}
+                    onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))}
                     className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
+                    placeholder="Main contact person"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Billed</label>
-                  <input
-                    value={form.totalBilled}
-                    onChange={(e) => setForm((f) => ({ ...f, totalBilled: e.target.value }))}
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as CustomerStatus }))}
                     className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                    placeholder="LKR 0"
+                  >
+                    <option>Active</option>
+                    <option>Inactive</option>
+                    <option>Lead</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Address</label>
+                  <textarea
+                    value={form.address}
+                    onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                    className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none min-h-[100px] resize-none"
+                    placeholder="Customer address"
                   />
                 </div>
               </div>
