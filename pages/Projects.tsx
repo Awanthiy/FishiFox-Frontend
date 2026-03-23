@@ -2,14 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Briefcase, Plus, Search, MoreHorizontal, User, Folder, ArrowUpRight } from 'lucide-react';
 
-type ProjectStatus = 'In Progress' | 'Completed';
+type ProjectStatus = 'Pending' | 'Ongoing' | 'Completed' | 'Cancelled';
 
 type Project = {
   id: string;
   name: string;
-  customer_name: string;
+  customerId: string | null;
+  customerName: string | null;
   status: ProjectStatus;
-  progress: number; // 0-100
+  progress: number;
+};
+
+type CustomerOption = {
+  id: string;
+  name: string;
 };
 
 type PaginatedResponse<T> = {
@@ -24,20 +30,21 @@ const API_BASE = import.meta.env.VITE_API_URL;
 
 type FormState = {
   name: string;
-  customer_name: string;
+  customerId: string;
   status: ProjectStatus;
-  progress: string; // keep string for input
+  progress: string;
 };
 
 const emptyForm: FormState = {
   name: '',
-  customer_name: '',
-  status: 'In Progress',
-  progress: '65',
+  customerId: '',
+  status: 'Pending',
+  progress: '0',
 };
 
 const Projects: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -45,12 +52,27 @@ const Projects: React.FC = () => {
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mode, setMode] = useState<'create' | 'edit'>('create');
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+
+  async function loadCustomers() {
+    const res = await fetch(`${API_BASE}/customers`);
+    if (!res.ok) throw new Error(`Customers API error: ${res.status}`);
+
+    const json = await res.json();
+
+    const rows = Array.isArray(json) ? json : json.data ?? [];
+
+    setCustomers(
+      rows.map((c: any) => ({
+        id: String(c.id),
+        name: c.name,
+      }))
+    );
+  }
 
   async function loadProjects(signal?: AbortSignal) {
     const params = new URLSearchParams();
@@ -62,7 +84,6 @@ const Projects: React.FC = () => {
 
     const json = await res.json();
 
-    // supports both paginated or array
     if (Array.isArray(json)) {
       setProjects(json as Project[]);
     } else {
@@ -77,7 +98,10 @@ const Projects: React.FC = () => {
     (async () => {
       try {
         setLoading(true);
-        await loadProjects(controller.signal);
+        await Promise.all([
+          loadProjects(controller.signal),
+          loadCustomers(),
+        ]);
       } catch (e) {
         if ((e as any)?.name !== 'AbortError') console.error(e);
       } finally {
@@ -88,7 +112,6 @@ const Projects: React.FC = () => {
     return () => controller.abort();
   }, [debouncedSearch]);
 
-  // close menu on outside click
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
@@ -113,9 +136,9 @@ const Projects: React.FC = () => {
     setEditing(p);
     setForm({
       name: p.name ?? '',
-      customer_name: p.customer_name ?? '',
-      status: p.status ?? 'In Progress',
-      progress: String(p.progress ?? 65),
+      customerId: p.customerId ?? '',
+      status: p.status ?? 'Pending',
+      progress: String(p.progress ?? 0),
     });
     setIsModalOpen(true);
     setOpenMenuId(null);
@@ -132,13 +155,13 @@ const Projects: React.FC = () => {
 
       const payload = {
         name: form.name.trim(),
-        customer_name: form.customer_name.trim(),
+        customerId: Number(form.customerId),
         status: form.status,
         progress: Number(form.progress || 0),
       };
 
       if (!payload.name) return alert('Project name is required');
-      if (!payload.customer_name) return alert('Customer name is required');
+      if (!payload.customerId) return alert('Customer is required');
       if (Number.isNaN(payload.progress) || payload.progress < 0 || payload.progress > 100) {
         return alert('Progress must be between 0 and 100');
       }
@@ -194,12 +217,12 @@ const Projects: React.FC = () => {
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Active Ventures</h1>
-          <p className="text-slate-500 mt-2 font-medium italic">Transforming requirements into functional excellence.</p>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Projects</h1>
+          <p className="text-slate-500 mt-2 font-medium italic">Manage active and completed client projects.</p>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center bg-white px-5 py-3 rounded-[1.5rem] border border-slate-200 shadow-sm focus-within:ring-2 focus-within:ring-primary/10 transition-all">
+          <div className="flex items-center bg-white px-5 py-3 rounded-[1.5rem] border border-slate-200 shadow-sm">
             <Search size={18} className="text-slate-400" />
             <input
               type="text"
@@ -215,20 +238,18 @@ const Projects: React.FC = () => {
             className="flex items-center gap-3 bg-primary hover:bg-primary/90 text-white px-8 py-4 rounded-[1.5rem] font-bold text-sm shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
           >
             <Plus size={20} />
-            New Venture
+            New Project
           </button>
         </div>
       </div>
 
-      {loading && (
-        <div className="text-sm font-black text-slate-400 px-2">Loading projects...</div>
-      )}
+      {loading && <div className="text-sm font-black text-slate-400 px-2">Loading projects...</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
         {projects.map((project) => {
-          const pct = Math.max(0, Math.min(100, Number(project.progress ?? 65)));
+          const pct = Math.max(0, Math.min(100, Number(project.progress ?? 0)));
           const initials =
-            (project.customer_name || '')
+            (project.customerName || '')
               .split(' ')
               .filter(Boolean)
               .map((n) => n[0])
@@ -238,7 +259,7 @@ const Projects: React.FC = () => {
           return (
             <div
               key={project.id}
-              className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-[0_10px_40px_rgba(0,0,0,0.02)] p-8 bento-card relative overflow-hidden group"
+              className="bg-white rounded-[2.5rem] border border-slate-200/60 shadow-[0_10px_40px_rgba(0,0,0,0.02)] p-8 relative overflow-hidden group"
             >
               <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
 
@@ -252,7 +273,11 @@ const Projects: React.FC = () => {
                     className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
                       project.status === 'Completed'
                         ? 'bg-emerald-50 text-emerald-600'
-                        : 'bg-slate-50 text-slate-500'
+                        : project.status === 'Cancelled'
+                        ? 'bg-rose-50 text-rose-600'
+                        : project.status === 'Ongoing'
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'bg-amber-50 text-amber-600'
                     }`}
                   >
                     {project.status}
@@ -299,12 +324,12 @@ const Projects: React.FC = () => {
 
               <div className="flex items-center gap-2 text-slate-400 text-sm font-semibold mb-8">
                 <User size={16} />
-                <span>{project.customer_name}</span>
+                <span>{project.customerName ?? '—'}</span>
               </div>
 
               <div className="space-y-3 mb-8">
                 <div className="flex justify-between text-[11px] font-black text-slate-500 uppercase tracking-widest">
-                  <span>Phase Progress</span>
+                  <span>Progress</span>
                   <span className="text-primary">{pct}%</span>
                 </div>
 
@@ -322,14 +347,14 @@ const Projects: React.FC = () => {
                     {initials}
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lead Entity</p>
-                    <p className="text-xs font-black text-slate-800">{project.customer_name}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer</p>
+                    <p className="text-xs font-black text-slate-800">{project.customerName ?? '—'}</p>
                   </div>
                 </div>
 
                 <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 flex items-center gap-2">
                   <Briefcase size={14} className="text-slate-400" />
-                  <span className="text-xs font-black text-slate-600">Active</span>
+                  <span className="text-xs font-black text-slate-600">{project.status}</span>
                 </div>
               </div>
             </div>
@@ -337,7 +362,6 @@ const Projects: React.FC = () => {
         })}
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-[999]" onClick={closeModal}>
           <div
@@ -345,7 +369,7 @@ const Projects: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-8 border-b border-slate-100">
-              <h3 className="text-lg font-black text-slate-800">{mode === 'create' ? 'New Venture' : 'Edit Venture'}</h3>
+              <h3 className="text-lg font-black text-slate-800">{mode === 'create' ? 'New Project' : 'Edit Project'}</h3>
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mt-1">
                 {mode === 'create' ? 'Create a new project' : 'Update project details'}
               </p>
@@ -359,18 +383,24 @@ const Projects: React.FC = () => {
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     className="mt-2 w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                    placeholder="SoftVibe Site Redesign"
+                    placeholder="Website Redesign"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</label>
-                  <input
-                    value={form.customer_name}
-                    onChange={(e) => setForm((f) => ({ ...f, customer_name: e.target.value }))}
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</label>
+                  <select
+                    value={form.customerId}
+                    onChange={(e) => setForm((f) => ({ ...f, customerId: e.target.value }))}
                     className="mt-2 w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                    placeholder="SoftVibe Solutions"
-                  />
+                  >
+                    <option value="">Select customer</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -380,8 +410,10 @@ const Projects: React.FC = () => {
                     onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as ProjectStatus }))}
                     className="mt-2 w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none"
                   >
-                    <option value="In Progress">In Progress</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Ongoing">Ongoing</option>
                     <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                 </div>
 
