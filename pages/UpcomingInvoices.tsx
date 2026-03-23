@@ -6,14 +6,14 @@ type InvoiceStatus = 'PAID' | 'PENDING' | 'OVERDUE';
 
 type RecurringTemplate = {
   id: string;
-  invoice_number: string; // template number e.g. TPL-2026-001
+  invoice_number: string;
   customer_name: string;
   amount: number;
   currency: string;
   status: InvoiceStatus;
   is_recurring: boolean;
   recurrence_period: RecurrencePeriod;
-  next_run_date: string | null; // YYYY-MM-DD
+  next_run_date: string | null;
 };
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -25,11 +25,12 @@ type AutomationForm = {
   currency: string;
   recurrence_period: RecurrencePeriod;
   next_run_date: string;
-  status: InvoiceStatus; // only used in edit
+  status: InvoiceStatus;
 };
 
 type InvoiceForm = {
   customer_name: string;
+  customer_email: string;
   amount: string;
   currency: string;
   billing_date: string;
@@ -47,6 +48,7 @@ const emptyAutomationForm: AutomationForm = {
 
 const emptyInvoiceForm: InvoiceForm = {
   customer_name: '',
+  customer_email: '',
   amount: '0',
   currency: 'LKR',
   billing_date: new Date().toISOString().slice(0, 10),
@@ -77,10 +79,8 @@ const UpcomingInvoices: React.FC = () => {
   const [upcoming, setUpcoming] = useState<RecurringTemplate[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 3-dots menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'automation' | 'invoice'>('automation');
   const [mode, setMode] = useState<'create' | 'edit'>('create');
@@ -90,16 +90,12 @@ const UpcomingInvoices: React.FC = () => {
   const [invoiceForm, setInvoiceForm] = useState<InvoiceForm>(emptyInvoiceForm);
 
   const [saving, setSaving] = useState(false);
-
-  // executed state
   const [executedIds, setExecutedIds] = useState<Set<string>>(new Set());
 
-  // init executed from localStorage
   useEffect(() => {
     setExecutedIds(readExecutedSet());
   }, []);
 
-  // close menu on outside click
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
@@ -147,7 +143,6 @@ const UpcomingInvoices: React.FC = () => {
     setSaving(false);
   }
 
-  // ---------- OPEN MODALS ----------
   function openNewAutomation() {
     setModalType('automation');
     setMode('create');
@@ -179,13 +174,13 @@ const UpcomingInvoices: React.FC = () => {
     setEditingId(null);
     setInvoiceForm({
       ...emptyInvoiceForm,
+      customer_email: '',
       billing_date: new Date().toISOString().slice(0, 10),
     });
     setIsModalOpen(true);
     setOpenMenuId(null);
   }
 
-  // ---------- API ACTIONS ----------
   async function saveAutomation() {
     const payload = {
       customer_name: automationForm.customer_name.trim(),
@@ -255,19 +250,28 @@ const UpcomingInvoices: React.FC = () => {
   }
 
   async function saveInvoice() {
+    const customerEmail = invoiceForm.customer_email.trim();
+
     const payload = {
       customer_name: invoiceForm.customer_name.trim(),
+      customer_email: customerEmail || null,
       amount: Number(invoiceForm.amount || 0),
       currency: invoiceForm.currency,
       billing_date: invoiceForm.billing_date.trim() || null,
       status: invoiceForm.status,
-      invoice_number: null, // backend auto generates
+      invoice_number: null,
     };
 
     if (!payload.customer_name) {
       alert('Customer name is required');
       return;
     }
+
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      alert('Enter a valid customer email');
+      return;
+    }
+
     if (Number.isNaN(payload.amount) || payload.amount < 0) {
       alert('Amount must be 0 or more');
       return;
@@ -308,7 +312,6 @@ const UpcomingInvoices: React.FC = () => {
         throw new Error(t || `Delete failed: ${res.status}`);
       }
 
-      // also remove executed flag for this id
       setExecutedIds((prev) => {
         const next = new Set(prev);
         next.delete(id);
@@ -324,7 +327,6 @@ const UpcomingInvoices: React.FC = () => {
   }
 
   async function handleExecute(templateId: string) {
-    // already executed => no-op
     if (executedIds.has(templateId)) return;
 
     try {
@@ -334,7 +336,6 @@ const UpcomingInvoices: React.FC = () => {
         throw new Error(t || `Execute failed: ${res.status}`);
       }
 
-      // mark as executed (orange state)
       setExecutedIds((prev) => {
         const next = new Set(prev);
         next.add(templateId);
@@ -342,7 +343,6 @@ const UpcomingInvoices: React.FC = () => {
         return next;
       });
 
-      // keep row visible, just refresh next_run_date from backend
       await refresh();
 
       alert('Executed ✅ A new invoice was created. Check the Invoices page.');
@@ -442,7 +442,6 @@ const UpcomingInvoices: React.FC = () => {
 
                       <td className="px-10 py-7 text-right">
                         <div className="flex items-center justify-end gap-3 relative" data-menu-root="true">
-                          {/* Execute / Executed */}
                           {isExecuted ? (
                             <button
                               disabled
@@ -508,7 +507,6 @@ const UpcomingInvoices: React.FC = () => {
         </div>
       </div>
 
-      {/* ---------------- MODAL ---------------- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-[999]" onClick={() => closeModal()}>
           <div
@@ -538,6 +536,17 @@ const UpcomingInvoices: React.FC = () => {
                       onChange={(e) => setInvoiceForm((f) => ({ ...f, customer_name: e.target.value }))}
                       className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
                       placeholder="Customer"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Email</label>
+                    <input
+                      type="email"
+                      value={invoiceForm.customer_email}
+                      onChange={(e) => setInvoiceForm((f) => ({ ...f, customer_email: e.target.value }))}
+                      className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
+                      placeholder="example@gmail.com"
                     />
                   </div>
 
