@@ -8,6 +8,7 @@ type RecurringTemplate = {
   id: string;
   invoice_number: string;
   customer_name: string;
+  customer_email?: string;
   amount: number;
   currency: string;
   status: InvoiceStatus;
@@ -16,11 +17,18 @@ type RecurringTemplate = {
   next_run_date: string | null;
 };
 
+type Customer = {
+  id: number;
+  name: string;
+  email?: string;
+};
+
 const API_BASE = import.meta.env.VITE_API_URL;
 const EXECUTED_KEY = 'ff_executed_automations';
 
 type AutomationForm = {
   customer_name: string;
+  customer_email: string;
   amount: string;
   currency: string;
   recurrence_period: RecurrencePeriod;
@@ -39,6 +47,7 @@ type InvoiceForm = {
 
 const emptyAutomationForm: AutomationForm = {
   customer_name: '',
+  customer_email: '',
   amount: '0',
   currency: 'LKR',
   recurrence_period: 'MONTHLY',
@@ -71,12 +80,13 @@ function writeExecutedSet(s: Set<string>) {
   try {
     localStorage.setItem(EXECUTED_KEY, JSON.stringify(Array.from(s)));
   } catch {
-    // ignore
+    //
   }
 }
 
 const UpcomingInvoices: React.FC = () => {
   const [upcoming, setUpcoming] = useState<RecurringTemplate[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -114,6 +124,13 @@ const UpcomingInvoices: React.FC = () => {
     setUpcoming(Array.isArray(json) ? (json as RecurringTemplate[]) : (json?.data ?? []));
   }
 
+  async function loadCustomers(signal?: AbortSignal) {
+    const res = await fetch(`${API_BASE}/customers`, { signal });
+    if (!res.ok) throw new Error(`Customers API error: ${res.status}`);
+    const json = await res.json();
+    setCustomers(Array.isArray(json) ? json : json?.data ?? []);
+  }
+
   async function refresh() {
     setLoading(true);
     try {
@@ -128,7 +145,10 @@ const UpcomingInvoices: React.FC = () => {
     (async () => {
       try {
         setLoading(true);
-        await loadTemplates(controller.signal);
+        await Promise.all([
+          loadTemplates(controller.signal),
+          loadCustomers(controller.signal),
+        ]);
       } catch (e) {
         if ((e as any)?.name !== 'AbortError') console.error(e);
       } finally {
@@ -158,6 +178,7 @@ const UpcomingInvoices: React.FC = () => {
     setEditingId(t.id);
     setAutomationForm({
       customer_name: t.customer_name ?? '',
+      customer_email: t.customer_email ?? '',
       amount: String(t.amount ?? 0),
       currency: t.currency ?? 'LKR',
       recurrence_period: (t.recurrence_period ?? 'MONTHLY') as RecurrencePeriod,
@@ -181,9 +202,32 @@ const UpcomingInvoices: React.FC = () => {
     setOpenMenuId(null);
   }
 
+  function handleInvoiceCustomerChange(selectedName: string) {
+    const selected = customers.find((c) => c.name === selectedName);
+
+    setInvoiceForm((prev) => ({
+      ...prev,
+      customer_name: selected?.name || '',
+      customer_email: selected?.email || '',
+    }));
+  }
+
+  function handleAutomationCustomerChange(selectedName: string) {
+    const selected = customers.find((c) => c.name === selectedName);
+
+    setAutomationForm((prev) => ({
+      ...prev,
+      customer_name: selected?.name || '',
+      customer_email: selected?.email || '',
+    }));
+  }
+
   async function saveAutomation() {
+    const customerEmail = automationForm.customer_email.trim();
+
     const payload = {
       customer_name: automationForm.customer_name.trim(),
+      customer_email: customerEmail || null,
       amount: Number(automationForm.amount || 0),
       currency: automationForm.currency,
       recurrence_period: automationForm.recurrence_period,
@@ -195,6 +239,12 @@ const UpcomingInvoices: React.FC = () => {
       alert('Customer name is required');
       return;
     }
+
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      alert('Enter a valid customer email');
+      return;
+    }
+
     if (Number.isNaN(payload.amount) || payload.amount < 0) {
       alert('Amount must be 0 or more');
       return;
@@ -208,6 +258,7 @@ const UpcomingInvoices: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customer_name: payload.customer_name,
+            customer_email: payload.customer_email,
             amount: payload.amount,
             currency: payload.currency,
             recurrence_period: payload.recurrence_period,
@@ -225,6 +276,7 @@ const UpcomingInvoices: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             customer_name: payload.customer_name,
+            customer_email: payload.customer_email,
             amount: payload.amount,
             currency: payload.currency,
             recurrence_period: payload.recurrence_period,
@@ -344,7 +396,6 @@ const UpcomingInvoices: React.FC = () => {
       });
 
       await refresh();
-
       alert('Executed ✅ A new invoice was created. Check the Invoices page.');
     } catch (e) {
       console.error(e);
@@ -531,12 +582,18 @@ const UpcomingInvoices: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</label>
-                    <input
+                    <select
                       value={invoiceForm.customer_name}
-                      onChange={(e) => setInvoiceForm((f) => ({ ...f, customer_name: e.target.value }))}
+                      onChange={(e) => handleInvoiceCustomerChange(e.target.value)}
                       className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                      placeholder="Customer"
-                    />
+                    >
+                      <option value="">Select Customer</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="md:col-span-2">
@@ -600,11 +657,28 @@ const UpcomingInvoices: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</label>
-                    <input
+                    <select
                       value={automationForm.customer_name}
-                      onChange={(e) => setAutomationForm((f) => ({ ...f, customer_name: e.target.value }))}
+                      onChange={(e) => handleAutomationCustomerChange(e.target.value)}
                       className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
-                      placeholder="Customer"
+                    >
+                      <option value="">Select Customer</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Email</label>
+                    <input
+                      type="email"
+                      value={automationForm.customer_email}
+                      onChange={(e) => setAutomationForm((f) => ({ ...f, customer_email: e.target.value }))}
+                      className="mt-2 w-full bg-[#F5F7FF] border border-[#F1F3FF] rounded-2xl px-4 py-3 text-sm font-bold outline-none"
+                      placeholder="example@gmail.com"
                     />
                   </div>
 

@@ -20,6 +20,12 @@ interface Invoice {
   status: keyof typeof InvoiceStatus;
 }
 
+interface Customer {
+  id: number;
+  name: string;
+  email?: string;
+}
+
 interface InvoiceForm {
   invoice_number: string;
   customer_name: string;
@@ -42,6 +48,7 @@ const emptyForm: InvoiceForm = {
 
 const Invoices: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,6 +66,13 @@ const Invoices: React.FC = () => {
     setInvoices(Array.isArray(json) ? json : json?.data ?? []);
   }
 
+  async function fetchCustomers(signal?: AbortSignal) {
+    const res = await fetch(`${API_BASE}/customers`, { signal });
+    if (!res.ok) throw new Error(`Customers API error: ${res.status}`);
+    const json = await res.json();
+    setCustomers(Array.isArray(json) ? json : json?.data ?? []);
+  }
+
   async function refresh() {
     setLoading(true);
     try {
@@ -74,7 +88,10 @@ const Invoices: React.FC = () => {
     (async () => {
       try {
         setLoading(true);
-        await fetchInvoices(controller.signal);
+        await Promise.all([
+          fetchInvoices(controller.signal),
+          fetchCustomers(controller.signal),
+        ]);
       } catch (e: unknown) {
         if ((e as DOMException).name !== 'AbortError') console.error(e);
       } finally {
@@ -110,6 +127,16 @@ const Invoices: React.FC = () => {
   function closeModal() {
     setIsModalOpen(false);
     setSaving(false);
+  }
+
+  function handleCustomerChange(selectedName: string) {
+    const selected = customers.find((c) => c.name === selectedName);
+
+    setForm((prev) => ({
+      ...prev,
+      customer_name: selected?.name || '',
+      customer_email: selected?.email || '',
+    }));
   }
 
   async function handleSave() {
@@ -221,6 +248,7 @@ const Invoices: React.FC = () => {
       if (!res.ok) throw new Error(await res.text());
 
       alert('Invoice email sent successfully.');
+      await refresh();
     } catch (e: unknown) {
       console.error(e);
       alert('Email send failed. Check backend / network tab.');
@@ -397,13 +425,18 @@ const Invoices: React.FC = () => {
                   className="w-full px-4 py-3 rounded-xl border border-[#E6E9FF] outline-none"
                 />
 
-                <input
-                  type="text"
-                  placeholder="Customer Name"
+                <select
                   value={form.customer_name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, customer_name: e.target.value }))}
+                  onChange={(e) => handleCustomerChange(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-[#E6E9FF] outline-none"
-                />
+                >
+                  <option value="">Select Customer</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
 
                 <input
                   type="email"
