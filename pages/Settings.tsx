@@ -91,6 +91,7 @@ const Settings: React.FC = () => {
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
+  const [uploadingCompanyLogo, setUploadingCompanyLogo] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState("");
 
   const [profile, setProfile] = useState<ProfileDTO>({
@@ -290,16 +291,7 @@ const Settings: React.FC = () => {
     }));
   }
 
-  function handleCompanyLogoPreview(file: File) {
-    const previewUrl = URL.createObjectURL(file);
-    setCompany((prev) => ({
-      ...prev,
-      company_logo_preview: previewUrl,
-    }));
-    setSaveSuccess("Logo selected in UI. Backend save can be added next.");
-  }
-
-  async function saveCompanyUIOnly() {
+  async function saveCompany() {
     try {
       setSavingCompany(true);
       setSaveSuccess("");
@@ -309,13 +301,79 @@ const Settings: React.FC = () => {
         return;
       }
 
-      setTimeout(() => {
-        setSaveSuccess("Company settings updated in UI. Backend connection can be added next.");
-        setSavingCompany(false);
-      }, 500);
-    } catch (e) {
+      const payload = {
+        company_name: company.company_name.trim(),
+        company_email: company.company_email.trim(),
+        company_phone: company.company_phone.trim(),
+        company_address: company.company_address.trim(),
+        invoice_header: company.invoice_header.trim(),
+        invoice_footer: company.invoice_footer.trim(),
+      };
+
+      const res = await fetch(`${API_BASE}/settings/company`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res));
+      }
+
+      const json = await res.json();
+
+      setCompany((prev) => ({
+        ...prev,
+        company_name: json.company_name ?? "",
+        company_email: json.company_email ?? "",
+        company_phone: json.company_phone ?? "",
+        company_address: json.company_address ?? "",
+        invoice_header: json.invoice_header ?? "",
+        invoice_footer: json.invoice_footer ?? "",
+        company_logo_preview: json.company_logo ?? prev.company_logo_preview,
+      }));
+
+      setSaveSuccess("Company settings saved successfully");
+      window.dispatchEvent(new Event("fishifox-settings-changed"));
+    } catch (e: any) {
       console.error(e);
+      alert(e?.message || "Company settings save failed");
+    } finally {
       setSavingCompany(false);
+    }
+  }
+
+  async function uploadCompanyLogo(file: File) {
+    try {
+      setUploadingCompanyLogo(true);
+      setSaveSuccess("");
+
+      const fd = new FormData();
+      fd.append("company_logo", file);
+
+      const res = await fetch(`${API_BASE}/settings/company/logo`, {
+        method: "POST",
+        body: fd,
+      });
+
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res));
+      }
+
+      const json: { company_logo: string | null } = await res.json();
+
+      setCompany((prev) => ({
+        ...prev,
+        company_logo_preview: json.company_logo,
+      }));
+
+      setSaveSuccess("Company logo uploaded successfully");
+      window.dispatchEvent(new Event("fishifox-settings-changed"));
+    } catch (e: any) {
+      console.error(e);
+      alert(e?.message || "Company logo upload failed");
+    } finally {
+      setUploadingCompanyLogo(false);
     }
   }
 
@@ -351,7 +409,6 @@ const Settings: React.FC = () => {
             </div>
           </div>
 
-          {/* PROFILE SECTION */}
           <div className="space-y-8">
             <div className="flex items-center gap-3">
               <User size={18} className="text-primary" />
@@ -460,7 +517,6 @@ const Settings: React.FC = () => {
             </div>
           </div>
 
-          {/* COMPANY SECTION */}
           <div className="space-y-8 pt-8 border-t border-[#F1F3FF]">
             <div className="flex items-center gap-3">
               <Building2 size={18} className="text-primary" />
@@ -533,7 +589,6 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            {/* LOGO UI ONLY */}
             <div className="space-y-3">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 Company Logo
@@ -560,7 +615,7 @@ const Settings: React.FC = () => {
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) handleCompanyLogoPreview(file);
+                      if (file) uploadCompanyLogo(file);
                       e.currentTarget.value = "";
                     }}
                   />
@@ -568,20 +623,24 @@ const Settings: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => companyLogoRef.current?.click()}
-                    className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-100 text-slate-700 font-black text-[12px] uppercase tracking-widest border border-[#F1F3FF] hover:bg-slate-200 transition-all"
+                    disabled={uploadingCompanyLogo}
+                    className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl bg-slate-100 text-slate-700 font-black text-[12px] uppercase tracking-widest border border-[#F1F3FF] hover:bg-slate-200 transition-all disabled:opacity-60"
                   >
-                    <ImageIcon size={16} />
-                    Choose Logo
+                    {uploadingCompanyLogo ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <ImageIcon size={16} />
+                    )}
+                    {uploadingCompanyLogo ? "Uploading..." : "Choose Logo"}
                   </button>
 
                   <p className="text-xs font-bold text-slate-400 mt-3">
-                    UI preview only for now. Backend upload can be connected next.
+                    Upload your real company logo here.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* HEADER & FOOTER */}
             <div className="grid grid-cols-1 gap-8">
               <div className="space-y-3">
                 <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -616,7 +675,7 @@ const Settings: React.FC = () => {
 
             <div className="pt-2 flex justify-end">
               <button
-                onClick={saveCompanyUIOnly}
+                onClick={saveCompany}
                 disabled={savingCompany}
                 className="bg-[#4B49AC] text-white px-10 py-4 rounded-2xl text-[13px] font-black uppercase tracking-widest shadow-2xl shadow-[#4B49AC]/25 hover:-translate-y-1 transition-all disabled:opacity-60 disabled:translate-y-0 flex items-center gap-3"
               >
